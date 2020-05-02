@@ -65,7 +65,7 @@ void Trigger_Timer0_init(void)
     TPM0->SC = 0;               /* disable timer */
     TPM0->CONTROLS[1].CnSC  = 0x80;   	  /* clear CHF  for Channel 1*/
     TPM0->CONTROLS[1].CnSC |= 0x20|0x08;  /* edge-aligned, pulse high MSB:MSA=10, ELSB:ELSA=10*/
-    TPM0->CONTROLS[1].CnV   = 8;  		  /* Set up channel value for >10 us*/
+    TPM0->CONTROLS[1].CnV   = 8 ;  		  /* Set up channel value for >10 us*/
 	TPM0->SC |= 0x06;           		  /* set timer with prescaler /64 */
     TPM0->MOD = mod;            		  /* Set up modulo register = 44999 */
 //*************************PRE-Scaler settings **************************
