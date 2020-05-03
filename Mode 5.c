@@ -46,6 +46,7 @@ int main(void) {
 	Capture_Timer2_init();
 	__enable_irq();
 
+
 		ADC0->SC1[0] &= ~0x1F;
     while (1) {
 //        ADC0->SC1[0] = 0;     /* start conversion on channel 0 */
@@ -70,12 +71,16 @@ int main(void) {
 }
 
 void ADC0_IRQHandler(void){
-	int voltage;
-	result = ADC0->R[0];
-	TPM0->CONTROLS[1].CnV = result*14;
-	voltage = result * 3300/4096;
-	sprintf(buffer, "\r\n voltage = %d mV", voltage);
-	UART0_puts(buffer);
+	int scaler;
+	char a;
+	UART0_puts(" Enter a motor speed between 0-9: ");
+	//result = ADC0->R[0];
+	a = UART0_Receive_Poll();
+	delayMs(2);
+	UART0_Transmit_Poll(a);
+	scaler = a-48;
+	TPM0->CONTROLS[1].CnV = 5580*scale;
+
 	delayMs(10);
 
 	ADC0->SC1[0] &= ~0x17;
@@ -280,9 +285,17 @@ void TPM2_IRQHandler(void) {
 	    sprintf(buffer, "Distance %d.%04d inches\r\n", tmpInt1, tmpInt2); /* convert to string */
 	    UART0_puts(buffer);
 
-    	if(distance > (float)1.0 && distance < 36){
-    		TPM0->CONTROLS[1].CnV = (distance/2)*1000;
-    	}
+	    if(distance < (float)12.0){
+			PTD->PSOR = 0x02;			//turn off blue LED
+			PTB->PCOR |= 0x40000;       /* Clear PTB18 to turn on red LED */
+			TPM0->CONTROLS[1].CnV = 0;
+		}
+		else if(distance < (float)24. && distance > (float)12.0){
+			PTB->PSOR |= 0x40000;		//turn off red LED
+			PTD->PCOR = 0x02;       /* turn on blue LED */
+		}
+		else
+				PTB->PSOR |= 0x40000;	/* Set PTB18 to turn off red LED */
 	}
 	i++;
 /*---------------------------------------------------------------------*/
