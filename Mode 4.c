@@ -1,4 +1,6 @@
-
+#define RS 1 /* BIT0 mask */
+#define RW 2 /* BIT1 mask */
+#define EN 4 /* BIT2 mask */
 #include "MKL25Z4.h"
 #include "board.h"
 #include "peripherals.h"
@@ -13,9 +15,22 @@ void UART0_Transmit_Poll(uint8_t);
 uint8_t UART0_Receive_Poll(void);
 void UART0_puts(char* s);
 void UART0Tx(char c);
-void getInput(void);
+void mode4(void);
+void mode3(void);
 void delayMs(int);
+
+void keypad_init(void);
+unsigned char keypad_getkey(void);
+
+unsigned char LCDdecode(int);
+void LCD_nibble_write(unsigned char data, unsigned char control);
+void LCD_command(unsigned char command);
+void LCD_data(unsigned char data);
+void LCD_init(void);
+unsigned char LCDpattern[] = {0x0, 'A', '3', '2', '1', 'B', '6', '5', '4', 'C', '9', '8', '7', 'D', 'E', '0', 'F'};
+unsigned char keypress;
 int number[4];
+int mode;
 char a;
 
 int main(void) {
@@ -28,9 +43,58 @@ int main(void) {
     ADC0_init();                    /* Configure ADC0 */
     PWM_init();                     /* Configure PWM */
     TPM0->CONTROLS[0].CnV = 4500;
+    unsigned char key;
     while (1) {
-        ADC0->SC1[0] = 0;     /* start conversion on channel 0 */
-        getInput();
+    	key = keypad_getkey();
+		delayMs(5);
+
+		if(key!= 0) /* checks if a value has been entered */
+    			{
+    				LCD_command(1); /* clear display */
+    				delayMs(1);
+    				LCD_command(0x80);
+    				delayMs(1);
+    				keypress = LCDdecode(key);
+    				LCD_data(keypress);
+    				delayMs(10);
+    				UART0_Transmit_Poll(keypress);
+
+    				if(keypress == '1')
+    				{
+    					mode = 1;
+    				}
+
+    				if(keypress == '2')
+    				{
+    					mode = 2;
+    				}
+
+    				if(keypress == '3')
+    				{
+    					mode = 3;
+    				}
+
+    				if(keypress == '4')
+    				{
+    					mode = 4;
+    				}
+
+    				if(keypress == '5')
+    				{
+    					mode = 5;
+    				}
+    			}
+
+		if(mode == 4)
+		{
+			//ADC0->SC1[0] = 0;     /*start conversion on channel 0 */
+			mode4();
+		}
+
+		if(mode == 3)
+		{
+			mode3();
+		}
 
 
         //while(!(ADC0->SC1[0] & 0x80)) { } /* wait for conversion complete */
@@ -53,7 +117,7 @@ int main(void) {
     }
 }
 
-void getInput(void){
+void mode4(void){
 	int result;
 	int myNum;
 	int CNV;
@@ -70,6 +134,25 @@ void getInput(void){
 	CNV = (33*result) + 1500;
 	TPM0->CONTROLS[0].CnV = CNV;
 	UART0_puts(" moved ");
+}
+
+void mode3(void){
+	int scale;
+	int result = 0;
+	UART0_puts(" Enter a scan speed between 1-9: ");
+	a = UART0_Receive_Poll();
+	delayMs(2);
+	UART0_Transmit_Poll(a);
+	scale = a-48;
+
+	while(result < 7500){
+		result += 10 * scale;
+		TPM0->CONTROLS[1].CnV = result;
+	}
+	while(result > 1500){
+		result -= 10 * scale;
+		TPM0->CONTROLS[1].CnV = result;
+	}
 }
 
 
@@ -214,3 +297,113 @@ void delayMs(int n) {
 	    for(i = 0 ; i < n; i++)
 	        for (j = 0; j < 3500; j++) {}
 	}
+
+void LCD_init(void)
+{
+	SIM->SCGC5 |= 0x400; /* enable clock to Port B */
+	PORTB->PCR[0] = 0x100; /* make PTB0 pin as GPIO */
+	PORTB->PCR[1] = 0x100; /* make PTB1 pin as GPIO */
+	PORTB->PCR[2] = 0x100; /* make PTB2 pin as GPIO */
+	PORTB->PCR[8] = 0x100; /* make PTB8 pin as GPIO */
+	PORTB->PCR[9] = 0x100; /* make PTB9 pin as GPIO */
+	PORTB->PCR[10] = 0x100; /* make PTB10 pin as GPIO */
+	PORTB->PCR[11] = 0x100; /* make PTB11 pin as GPIO */
+	PTB->PDDR |= 0xF07;
+	delayMs(30); /* initialization sequence */
+	LCD_nibble_write(0x30, 0);
+	delayMs(10);
+	LCD_nibble_write(0x30, 0);
+	delayMs(1);
+	LCD_nibble_write(0x30, 0);
+	delayMs(1);
+	LCD_nibble_write(0x20, 0); /* use 4-bit data mode */
+	delayMs(1);
+	LCD_command(0x28); /* set 4-bit data, 2-line, 5x7 font */
+	LCD_command(0x06); /* move cursor right */
+	LCD_command(0x01); /* clear screen, move cursor to home */
+	LCD_command(0x0F); /* turn on display, cursor blinking */
+}
+void LCD_nibble_write(unsigned char data, unsigned char control)
+{
+	unsigned char data1;
+	unsigned char data2;
+	unsigned char data3;
+	data &= 0xF0; /* clear lower nibble for control */
+	control &= 0x0F; /* clear upper nibble for data */
+	data1 = data |control;
+	data2 = data | control |EN;
+	data3 = data;
+	PTB->PDOR = (data1 & 0xF0) << 4 | (data1 & 0x0F);
+	PTB->PDOR = (data2 & 0xF0) << 4 | (data2 & 0x0F);
+	delayMs(2);
+	PTB->PDOR = (data3 & 0xF0) << 4 | (data3 & 0x0F);
+	PTB->PDOR = 0;
+}
+void LCD_command(unsigned char command)
+{
+	LCD_nibble_write(command & 0xF0, 0); /* upper nibble first */
+	LCD_nibble_write(command << 4, 0); /* then lower nibble */
+	if (command < 4)
+	delayMs(4); /* commands 1 and 2 need up to 1.64ms */
+	else
+	delayMs(1); /* all others 40 us */
+}
+void LCD_data(unsigned char data)
+{
+	LCD_nibble_write(data & 0xF0, RS); /* upper nibble first */
+	LCD_nibble_write(data << 4, RS); /* then lower nibble */
+	delayMs(1);
+}
+unsigned char LCDdecode(int n)
+{
+	return LCDpattern[n];
+}
+
+unsigned char keypad_getkey(void)
+{
+	int row, col;
+	const int row_select[] = {0x01, 0x800, 0x400, 0x08}; /* one row is active */
+	/* check to see any key pressed */
+	PTC->PDDR |= 0xC09; /* enable all rows */
+	PTC->PCOR = 0xC09;
+	delayMs(2); /* wait for signal return */
+	col = PTC->PDIR & 0xF0; /* read all columns */
+	PTC->PDDR = 000; /* disable all rows */
+	if (col == 0xF0)
+		return 0; /* no key pressed */
+	/* If a key is pressed, it gets here to find out which key.
+	* It activates one row at a time and read the input to see
+	* which column is active. */
+	for (row = 0; row < 4; row++)
+	{
+		PTC->PDDR = 000; /* disable all rows */
+		PTC->PDDR |= row_select[row]; /* enable one row */
+		PTC->PCOR = row_select[row]; /* drive the active row low */
+		delayMs(2); /* wait for signal to settle */
+		col = PTC->PDIR & 0xF0; /* read all columns */
+		if (col != 0xF0) break; /* if one of the input is low, some key is pressed. */
+	}
+	PTC->PDDR = 0; /* disable all rows */
+	if (row == 4)
+		return 0; /* if we get here, no key is pressed */
+	/* gets here when one of the rows has key pressed, check which column it is */
+	if (col == 0xE0) return row * 4 + 1; /* key in column 0 */
+	if (col == 0xD0) return row * 4 + 2; /* key in column 1 */
+	if (col == 0xB0) return row * 4 + 3; /* key in column 2 */
+	if (col == 0x70) return row * 4 + 4; /* key in column 3 */
+	return 0; /* just to be safe */
+}
+
+void keypad_init(void)
+{
+	SIM->SCGC5 |= 0x0800; /* enable clock to Port C */
+	PORTC->PCR[0] = 0x103; /* make PTC0 pin as GPIO and enable pullup*/
+	PORTC->PCR[11] = 0x103; /* make PTC1 pin as GPIO and enable pullup*/
+	PORTC->PCR[10] = 0x103; /* make PTC2 pin as GPIO and enable pullup*/
+	PORTC->PCR[3] = 0x103; /* make PTC3 pin as GPIO and enable pullup*/
+	PORTC->PCR[4] = 0x103; /* make PTC4 pin as GPIO and enable pullup*/
+	PORTC->PCR[5] = 0x103; /* make PTC5 pin as GPIO and enable pullup*/
+	PORTC->PCR[6] = 0x103; /* make PTC6 pin as GPIO and enable pullup*/
+	PORTC->PCR[7] = 0x103; /* make PTC7 pin as GPIO and enable pullup*/
+	PTC->PDDR = 0xC09; /* make PTC7-4 as input pins, PTC3-0 as outputs */
+}
