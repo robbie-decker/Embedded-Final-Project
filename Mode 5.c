@@ -27,30 +27,39 @@ int tmpInt2;
 volatile uint32_t cont[2];
 short int result;
 char buffer[30];
-
+char a;
+int scaler;
 int i = 0;
 #define mod 44999  //14999
 
 
 int main(void) {
-	__disable_irq();
+	__disable_irq();				/* global disable IRQs */
     BOARD_InitBootClocks();
 
     LED_init();                     /* Configure LEDs */
     ADC0_init();                    /* Configure ADC0 */
     PWM_init();						/* Configure PWM */
     UART0_init();
-    sprintf(buffer, "\r\nUltrasonic sensor Testing"); 	/* convert to string */
-	UART0_puts(buffer);
+    //sprintf(buffer, "\r\nUltrasonic sensor Testing"); 	/* convert to string */
+	//UART0_puts(buffer);
 
-	        					/* global disable IRQs */
-	Trigger_Timer0_init();                     	/* Configure PWM */
+
+	//Trigger_Timer0_init();                     	/* Configure PWM */
 	Capture_Timer2_init();
 	__enable_irq();
 
 
 		ADC0->SC1[0] &= ~0x1F;
     while (1) {
+    	a = UART0_Receive_Poll();
+		delayMs(2);
+		UART0_Transmit_Poll(a);
+		scaler = a-48;
+		UART0_puts(" Enter a motor speed between 0-9: ");
+		TPM0->CONTROLS[1].CnV = 5580*scaler;
+		delayMs(10);
+
 //        ADC0->SC1[0] = 0;     /* start conversion on channel 0 */
 //
 //        while(!(ADC0->SC1[0] & 0x80)) { } /* wait for conversion complete */
@@ -73,17 +82,10 @@ int main(void) {
 }
 
 void ADC0_IRQHandler(void){
-	int scaler;
-	char a;
-	UART0_puts(" Enter a motor speed between 0-9: ");
-	//result = ADC0->R[0];
-	a = UART0_Receive_Poll();
-	delayMs(2);
-	UART0_Transmit_Poll(a);
-	scaler = a-48;
-	TPM0->CONTROLS[1].CnV = 5580*scaler;
 
-	delayMs(10);
+
+	result = ADC0->R[0];
+
 
 	ADC0->SC1[0] &= ~0x17;
 
@@ -93,16 +95,38 @@ void ADC0_IRQHandler(void){
 void PWM_init(void)
 {
     SIM->SCGC5 |= 0x800;       		   	   /* enable clock to Port C*/
+    SIM->SCGC5 |= 0x1000;					//enable clock to Port D
     PORTC->PCR[2] = 0x0400;     		   /* PTC2 used by TPM0 */
+    PORTD->PCR[3] = 0x0400; 				//PTD3 used by TPMO channel 3
     SIM->SCGC6 |= 0x01000000;   		   /* enable clock to TPM0 */
     SIM->SOPT2 |= 0x01000000;   		   /* use MCGFLLCLK as timer counter clock */
 
     TPM0->SC = 0;               		  /* disable timer */
 //    TPM0->CONTROLS[1].CnSC = 0x20|0x08;   /* edge-aligned PWM, pulse high MSB:MSA=10, ELSB:ELSA=10*/
     TPM0->CONTROLS[1].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
-    TPM0->MOD = 44999;          		  /* Set up modulo register for 50 Hz - 48.00 MHz */
+    TPM0->CONTROLS[3].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
+    TPM0->MOD = 60000;          		  /* Set up modulo register for 50 Hz - 48.00 MHz */
     TPM0->CONTROLS[1].CnV = 1500;  		  /* Set up channel value for 2.5% duty-cycle */
+    TPM0->CONTROLS[3].CnV = 1500;
     TPM0->SC |= 0x0C;            		  /* enable TPM0 with pre-scaler /16 */
+}
+
+void Trigger_Timer0_init(void)
+{
+    SIM->SCGC5 |= 0x0800;       /* enable clock to Port C*/
+    SIM->SCGC6 |= 0x01000000;   /* enable clock to TPM0 */
+    SIM->SOPT2 |= 0x01000000;   /* use MCGFLLCLK as timer counter clock */
+    PORTC->PCR[2] = 0x0400;     /* PTC2 used by TPM0_CH1 */
+
+    TPM0->SC = 0;               /* disable timer */
+    TPM0->CONTROLS[1].CnSC  = 0x80;   	  /* clear CHF  for Channel 1*/
+    TPM0->CONTROLS[1].CnSC |= 0x20|0x08;  /* edge-aligned, pulse high MSB:MSA=10, ELSB:ELSA=10*/
+    TPM0->CONTROLS[1].CnV   = 8;  		  /* Set up channel value for >10 us*/
+	TPM0->SC |= 0x06;           		  /* set timer with prescaler /64 */
+    TPM0->MOD = mod;            		  /* Set up modulo register = 44999 */
+//*************************PRE-Scaler settings **************************
+	TPM0->SC |= 0x08;           	      /* enable timer */
+//***********************************************************************
 }
 
 void ADC0_init(void)
@@ -186,23 +210,7 @@ void LED_set(int s) {
         PTD->PSOR = 0x02;       /* turn off blue LED */
 }
 
-void Trigger_Timer0_init(void)
-{
-    SIM->SCGC5 |= 0x0800;       /* enable clock to Port C*/
-    SIM->SCGC6 |= 0x01000000;   /* enable clock to TPM0 */
-    SIM->SOPT2 |= 0x01000000;   /* use MCGFLLCLK as timer counter clock */
-    PORTC->PCR[2] = 0x0400;     /* PTC2 used by TPM0_CH1 */
 
-    TPM0->SC = 0;               /* disable timer */
-    TPM0->CONTROLS[1].CnSC  = 0x80;   	  /* clear CHF  for Channel 1*/
-    TPM0->CONTROLS[1].CnSC |= 0x20|0x08;  /* edge-aligned, pulse high MSB:MSA=10, ELSB:ELSA=10*/
-    TPM0->CONTROLS[1].CnV   = 8;  		  /* Set up channel value for >10 us*/
-	TPM0->SC |= 0x06;           		  /* set timer with prescaler /64 */
-    TPM0->MOD = mod;            		  /* Set up modulo register = 44999 */
-//*************************PRE-Scaler settings **************************
-	TPM0->SC |= 0x08;           	      /* enable timer */
-//***********************************************************************
-}
 
 
 void Capture_Timer2_init(void)  // Also enables the TPM2_CH1 interrupt
@@ -301,6 +309,8 @@ void TPM2_IRQHandler(void) {
 			PTD->PSOR = 0x02;			//turn off blue LED
 			PTB->PCOR |= 0x40000;       /* Clear PTB18 to turn on red LED */
 			TPM0->CONTROLS[1].CnV = 0;
+
+
 		}
 		else if(distance < (float)24. && distance > (float)12.0){
 			PTB->PSOR |= 0x40000;		//turn off red LED
