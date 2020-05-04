@@ -52,11 +52,13 @@ int main(void) {
 
 		ADC0->SC1[0] &= ~0x1F;
     while (1) {
+
+    	UART0_puts(" Enter a motor speed between 0-9: ");
     	a = UART0_Receive_Poll();
 		delayMs(2);
 		UART0_Transmit_Poll(a);
 		scaler = a-48;
-		UART0_puts(" Enter a motor speed between 0-9: ");
+
 		TPM0->CONTROLS[1].CnV = 5580*scaler;
 		delayMs(10);
 
@@ -285,16 +287,16 @@ void TPM2_IRQHandler(void) {
 		    pulse_width = cont[1] - cont[0] + mod + 1;
 		}
 
-		sprintf(buffer, "Pulse width %d \r\n", pulse_width); /* convert to string */
-		UART0_puts(buffer);
+		//sprintf(buffer, "Pulse width %d \r\n", pulse_width); /* convert to string */
+		//UART0_puts(buffer);
 		distance = (float)(pulse_width*2/3)*0.0343;
 
 		tmpInt1 = distance;
 		tmpFrac = distance - tmpInt1;
 		tmpInt2 = (tmpFrac * 10000);
 
-	    sprintf(buffer, "Distance %d.%04d cm\r\n", tmpInt1, tmpInt2); /* convert to string */
-	    UART0_puts(buffer);
+	   //sprintf(buffer, "Distance %d.%04d cm\r\n", tmpInt1, tmpInt2); /* convert to string */
+	    //UART0_puts(buffer);
 
 		distance = (float)(distance/2.54);
 
@@ -302,8 +304,8 @@ void TPM2_IRQHandler(void) {
 		tmpFrac = distance - tmpInt1;
 		tmpInt2 = (tmpFrac * 10000);
 
-	    sprintf(buffer, "Distance %d.%04d inches\r\n", tmpInt1, tmpInt2); /* convert to string */
-	    UART0_puts(buffer);
+	    //sprintf(buffer, "Distance %d.%04d inches\r\n", tmpInt1, tmpInt2); /* convert to string */
+	    //UART0_puts(buffer);
 
 	    if(distance < (float)12.0){
 			PTD->PSOR = 0x02;			//turn off blue LED
