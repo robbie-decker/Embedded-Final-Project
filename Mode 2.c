@@ -9,6 +9,7 @@
 void delayMs(int n);
 void Trigger_Timer0_init(void);
 void Capture_Timer2_init(void);
+void Buzzer_Timer_Init(void);
 void ADC0_IRQHandler(void);
 void ADC0_init(void);
 void PWM_init(void);
@@ -20,6 +21,7 @@ void UART0_puts(char* s);
 volatile uint32_t pulse_width;
 volatile float distance;
 // https://stackoverflow.com/questions/905928/using-floats-with-sprintf-in-embedded-c
+char mode;
 int tmpInt1;
 float tmpFrac;
 int tmpInt2;
@@ -83,17 +85,34 @@ void ADC0_IRQHandler(void){
 
 }
 
+void Buzzer_Timer_Init(void){
+	SIM->SCGC5 |= 0x200;		//enable clock to port A
+	PORTA->PCR[12] = 0x0400; 	//PTA1 used by TPM1
+	SIM->SCGC6 |= 0x02000000;	//enable clock to TPM1
+	SIM->SOPT2 |= 0x01000000;
+	TPM1->SC = 0;               		  /* disable timer */
+	//    TPM0->CONTROLS[1].CnSC = 0x20|0x08;   /* edge-aligned PWM, pulse high MSB:MSA=10, ELSB:ELSA=10*/
+	TPM1->CONTROLS[0].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
+	//TPM0->CONTROLS[3].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
+	TPM1->MOD = 60000;          		  /* Set up modulo register for 50 Hz - 48.00 MHz */
+	TPM1->CONTROLS[0].CnV = 1500;  		  /* Set up channel value for 2.5% duty-cycle */
+	TPM1->SC |= 0x0C;
+}
+
 
 void PWM_init(void)
 {
     SIM->SCGC5 |= 0x800;       		   	   /* enable clock to Port C*/
+    //SIM->SCGC5 |= 0x1000;					//enable clock to Port D
     PORTC->PCR[2] = 0x0400;     		   /* PTC2 used by TPM0 */
+    PORTD->PCR[3] = 0x0400; 				//PTD3 used by TPMO channel 3
     SIM->SCGC6 |= 0x01000000;   		   /* enable clock to TPM0 */
     SIM->SOPT2 |= 0x01000000;   		   /* use MCGFLLCLK as timer counter clock */
 
     TPM0->SC = 0;               		  /* disable timer */
 //    TPM0->CONTROLS[1].CnSC = 0x20|0x08;   /* edge-aligned PWM, pulse high MSB:MSA=10, ELSB:ELSA=10*/
     TPM0->CONTROLS[1].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
+    //TPM0->CONTROLS[3].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
     TPM0->MOD = 60000;          		  /* Set up modulo register for 50 Hz - 48.00 MHz */
     TPM0->CONTROLS[1].CnV = 1500;  		  /* Set up channel value for 2.5% duty-cycle */
     TPM0->SC |= 0x0C;            		  /* enable TPM0 with pre-scaler /16 */
@@ -288,16 +307,21 @@ void TPM2_IRQHandler(void) {
 	    UART0_puts(buffer);
 
     	if(distance < (float)12.0){
+    		TPM1->CONTROLS[0].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
     		PTD->PSOR = 0x02;			//turn off blue LED
     	    PTB->PCOR |= 0x40000;       /* Clear PTB18 to turn on red LED */
     	    TPM0->CONTROLS[1].CnV = 0;
+    	    TPM1->MOD = 6000 - (460* (float)distance);
+    	    TPM1->CONTROLS[0].CnV = TPM1->MOD/2;
     	}
     	else if(distance < (float)24. && distance > (float)12.0){
     		PTB->PSOR |= 0x40000;		//turn off red LED
     		PTD->PCOR = 0x02;       /* turn on blue LED */
+    		TPM1->CONTROLS[0].CnSC = 0x00;
     	}
     	else
     	    PTB->PSOR |= 0x40000;	/* Set PTB18 to turn off red LED */
+    		TPM1->CONTROLS[0].CnSC = 0x00;
 	}
 	i++;
 /*---------------------------------------------------------------------*/
