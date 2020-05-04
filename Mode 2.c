@@ -87,7 +87,7 @@ void ADC0_IRQHandler(void){
 
 void Buzzer_Timer_Init(void){
 	SIM->SCGC5 |= 0x200;		//enable clock to port A
-	PORTA->PCR[12] = 0x0400; 	//PTA1 used by TPM1
+	PORTA->PCR[12] = 0x0300; 	//PTA12 used by TPM1
 	SIM->SCGC6 |= 0x02000000;	//enable clock to TPM1
 	SIM->SOPT2 |= 0x01000000;
 	TPM1->SC = 0;               		  /* disable timer */
@@ -95,7 +95,7 @@ void Buzzer_Timer_Init(void){
 	TPM1->CONTROLS[0].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
 	//TPM0->CONTROLS[3].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
 	TPM1->MOD = 60000;          		  /* Set up modulo register for 50 Hz - 48.00 MHz */
-	TPM1->CONTROLS[0].CnV = 1500;  		  /* Set up channel value for 2.5% duty-cycle */
+	TPM1->CONTROLS[0].CnV = TPM1->MOD/2;  		  /* Set up channel value for 2.5% duty-cycle */
 	TPM1->SC |= 0x0C;
 }
 
@@ -307,21 +307,21 @@ void TPM2_IRQHandler(void) {
 	    UART0_puts(buffer);
 
     	if(distance < (float)12.0){
-    		TPM1->CONTROLS[0].CnSC |= TPM_CnSC_MSB_MASK |TPM_CnSC_ELSB_MASK; //Enable TPM0_CH1 as edge-aligned PWM
     		PTD->PSOR = 0x02;			//turn off blue LED
     	    PTB->PCOR |= 0x40000;       /* Clear PTB18 to turn on red LED */
     	    TPM0->CONTROLS[1].CnV = 0;
-    	    TPM1->MOD = 6000 - (460* (float)distance);
-    	    TPM1->CONTROLS[0].CnV = TPM1->MOD/2;
+    	    TPM1->CONTROLS[0].CnV = 0;
     	}
     	else if(distance < (float)24. && distance > (float)12.0){
     		PTB->PSOR |= 0x40000;		//turn off red LED
-    		PTD->PCOR = 0x02;       /* turn on blue LED */
-    		TPM1->CONTROLS[0].CnSC = 0x00;
+    		PTD->PCOR = 0x02;
+    		TPM1->MOD = 6000 - (420* distance);
+			TPM1->CONTROLS[0].CnV = TPM1->MOD/2;/* turn on blue LED */
+
     	}
     	else
     	    PTB->PSOR |= 0x40000;	/* Set PTB18 to turn off red LED */
-    		TPM1->CONTROLS[0].CnSC = 0x00;
+    		TPM1->CONTROLS[0].CnV = 0;
 	}
 	i++;
 /*---------------------------------------------------------------------*/
