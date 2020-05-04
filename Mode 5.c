@@ -31,6 +31,7 @@ volatile uint32_t cont[2];
 short int result;
 char buffer[30];
 char a;
+int scale;
 
 int i = 0;
 #define mod 44999  //14999
@@ -44,6 +45,7 @@ int main(void) {
     ADC0_init();                    /* Configure ADC0 */
     PWM_init();						/* Configure PWM */
     UART0_init();
+    Buzzer_Timer_Init();
     //sprintf(buffer, "\r\nUltrasonic sensor Testing"); 	/* convert to string */
 	//UART0_puts(buffer);
 
@@ -51,9 +53,10 @@ int main(void) {
 	//Trigger_Timer0_init();                     	/* Configure PWM */
 	Capture_Timer2_init();
 	__enable_irq();
-	int scale;
-		ADC0->SC1[0] &= ~0x1F;
+
+
     while (1) {
+    	ADC0->SC1[0] =0;
     	UART0_puts(" Enter a motor speed between 0-9: ");
 		a = UART0_Receive_Poll();
 		delayMs(2);
@@ -63,11 +66,16 @@ int main(void) {
     }
 }
 
-void ADC0_IRQHandler(void){
-
-	ADC0->SC1[0] &= ~0x17;
-
-}
+//void ADC0_IRQHandler(void){
+//	UART0_puts(" Enter a motor speed between 0-9: ");
+//			a = UART0_Receive_Poll();
+//			delayMs(2);
+//			UART0_Transmit_Poll(a);
+//			scale = 48;
+//			TPM0->CONTROLS[1].CnV = 6200*scale;
+//	ADC0->SC1[0] &= ~0x17;
+//
+//}
 
 void Buzzer_Timer_Init(void){
 	SIM->SCGC5 |= 0x200;		//enable clock to port A
@@ -113,8 +121,8 @@ void ADC0_init(void)
     ADC0->SC2 &= ~0x40;         /* software trigger */
     /* clock div by 4, long sample time, single ended 12 bit, bus clock */
     ADC0->CFG1 = 0x40 | 0x10 | 0x04 | 0x00;
-    ADC0->SC1[0] |= 0x40;
-    NVIC->ISER[0] |= 0x8000;
+    //ADC0->SC1[0] |= 0x40;
+    //NVIC->ISER[0] |= 0x8000;
     //Start Calibration
     ADC0->SC3 |= ADC_SC3_CAL_MASK;
 	while (ADC0->SC3 & ADC_SC3_CAL_MASK) {
@@ -230,17 +238,20 @@ void Capture_Timer2_init(void)  // Also enables the TPM2_CH1 interrupt
 
 
 void UART0_init(void) {
-    SIM->SCGC4 |= 0x0400;    /* enable clock for UART0 */
-    SIM->SOPT2 |= 0x04000000;    /* use FLL output for UART Baud rate generator */
-    UART0->C2   = 0;          /* turn off UART0 while changing configurations */
-    UART0->BDH  = 0x00;
-    UART0->BDL  = 0x1A;      /* 115200 Baud with 48 MHz*/
-    UART0->C4   = 0x0F;       /* Over Sampling Ratio 16 */
-    UART0->C1   = 0x00;       /* 8-bit data */
-    UART0->C2   = 0x08;       /* enable transmit */
+	SIM->SCGC4 |= SIM_SCGC4_UART0(1);            //0x0400;    /* enable clock for UART0 */
+	SIM->SOPT2 |= SIM_SOPT2_UART0SRC(1);         //0x04000000 /* use FLL output for UART Baud rate generator */
+	UART0->C2   = 0;                             //0x00       /* turn off UART0 while changing configurations */
+	UART0->BDH  = UART0_BDH_SBR(0);              //0x00;      /* SBR12:SBR8 = 0b00000    - 115200 Baud
+	UART0->C4   = UART0_C4_OSR(15);              //0x0F;      /* Over Sampling Ratio (15+1) */
+//	    UART0->BDL  = UART0_BDL_SBR(137);            //0x89;      /* SBR7:SBR0  = 0b10001001 -   9600 Baud - Clock = 20.97 MHz*/
+//	    UART0->BDL  = UART0_BDL_SBR(12);             //0x0C;      /* SBR7:SBR0  = 0b00001100 - 115200 Baud - Clock = 20.97 MHz*/
+	UART0->BDL  = UART0_BDL_SBR(26); 			 //0x1A;      /* SBR7:SBR0  = 0b00011010 - 115200 Baud - Clock = 48.00 MHz */
+	UART0->C1   = UART0_C1_M(0);                 //0x00;      /* 8-bit data */
+	UART0->C2   = UART0_C2_TE(1)|UART0_C2_RE(1); //|=0x0C;    /* enable transmit & Receive*/
 
-    SIM->SCGC5   |= 0x0200;    /* enable clock for PORTA */
-    PORTA->PCR[2] = 0x0200; /* make PTA2 UART0_Tx pin */
+	SIM->SCGC5     = SIM_SCGC5_PORTA(1);         //|= 0x0200; /* enable clock for PORTA */
+	PORTA->PCR[2]  = PORT_PCR_MUX(2);            //0x0200;    /* make PTA2 UART0_Tx pin */
+	PORTA->PCR[1]  = PORT_PCR_MUX(2);            //0x0200;    /* make PTA1 UART0_Rx pin */
 }
 
 
