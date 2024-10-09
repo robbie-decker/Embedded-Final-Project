@@ -142,4 +142,11 @@ subtract 48 from that character to get the numerical value (scale) and do the fo
 This equation works since the highest number a user can input is 9 and since 6,200 * 9 =
 55,800 (which is close to the 93% duty cycle for the motor)
 
+
+
+
+Mode Switching: ​To get all modes working together to showcase the ability of our matrix keyboard and LCD screen. Our keyboard would take an input from the user to draw a distinction between modes. We first had to initialize the keyboard since it had to use ports C0, C11, C10 and C3 as output pins and C4, C5, C6 and C7 as input pins. We then figured out what key was pressed by using the function keypad_getkey, which would scan through the rows and columns of the keyboard to see which key was pressed. In our main while loop, we would call the function keypad_getkey to see if the user input a value, and if the key press was 3, 4 or 5 it would go into the corresponding function (mode3, mode4 or mode5, respectively), which would then perform the mode’s function. Since modes 1 and 2 relied on ADC0 conversion, we had to use a different strategy. Because they operated on an ADC0 complete interrupt, we instead had an int variable called mode which would be set to either 1 or 2 depending on the keypress. These modes would instead be carried out in the ADC0 interrupt handler function. To do this we had if statements that would activate the right timer channel for the servo if the mode was 1, and a similar if statement that would activate the channel for the DC motor if the mode was 2. In this handler function we also had to add another key = keypad_getkey() to see if a new input was made by the user on the matrix keyboard. All the while, whatever input the user gives would appear on the LCD screen. We initialized the pins B0, B1, B2, B8, B9, B10 and B11 as GPIO output pins. We used the function LCD_data to send the input from the keypad to the LCD screen.
+
+
 figures 18 - 21
+
