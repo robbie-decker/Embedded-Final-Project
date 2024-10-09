@@ -9,7 +9,7 @@ Mode 4: ​Control the position of the servo using Putty
 Mode 5: ​Control the speed of the DC motor using Putty
 For both Mode 2 and Mode 5, an ultrasonic sensor should be used to detect whether an object is within certain distances of the motor, and activate a corresponding LED and siren with respect to the object’s distance. The current mode should be chosen using the matrix keyboard, and then displayed simultaneously on both the LCD display and Putty. Also most modes here used variations of the ADC0_PWM.zip file from the course documents.
 
-diagram of board
+![Diagram of board](photos/diagram%20of%20board.png)
 
 Project Description
 
